@@ -123,7 +123,7 @@ async function main(): Promise<void> {
       dates: payload.daily.time,
       tmax: payload.daily.temperature_2m_max,
       tmin: payload.daily.temperature_2m_min,
-      precip: payload.daily.precipitation_sum,
+      precip: payload.daily.precipitation_sum ?? payload.daily.time.map(() => null),
     };
     assertValidSeries(full);
     communes.push({
