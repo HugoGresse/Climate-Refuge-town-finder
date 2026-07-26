@@ -105,6 +105,17 @@ def main() -> None:
     if "--depts" in sys.argv:
         depts = sys.argv[sys.argv.index("--depts") + 1].split(",")
 
+    years = [
+        y
+        for y in YEARS
+        if (CDS_DIR / f"era5land_tmax_{y}.nc").exists()
+        and (CDS_DIR / f"era5land_tmin_{y}.nc").exists()
+    ]
+    if not years:
+        sys.exit("no complete year files in data/cds — run fetch_era5land_cds.py first")
+    if len(years) < len(list(YEARS)):
+        print(f"WARNING: only {len(years)}/{len(list(YEARS))} years available — partial run")
+
     referential = json.loads(COMMUNES_FILE.read_text())
     communes = [c for c in referential["communes"] if c["dept"] in depts]
     OUT_DIR.mkdir(parents=True, exist_ok=True)
@@ -117,7 +128,7 @@ def main() -> None:
         return
 
     # Grid geometry + static land mask from one reference file.
-    ref = xr.open_dataset(CDS_DIR / f"era5land_tmax_{YEARS[0]}.nc")
+    ref = xr.open_dataset(CDS_DIR / f"era5land_tmax_{years[0]}.nc")
     var = next(iter(ref.data_vars))
     tdim = "valid_time" if "valid_time" in ref.dims else "time"
     lats = ref["latitude"].values.astype(np.float64)
@@ -185,7 +196,7 @@ def main() -> None:
     tmax_parts: list[np.ndarray] = []
     tmin_parts: list[np.ndarray] = []
 
-    for year in YEARS:
+    for year in years:
         for tag, parts in (("tmax", tmax_parts), ("tmin", tmin_parts)):
             path = CDS_DIR / f"era5land_{tag}_{year}.nc"
             ds = xr.open_dataset(path)
