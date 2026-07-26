@@ -61,10 +61,18 @@ def probe(client: cdsapi.Client) -> None:
     print(f"Nîmes cell mean Tmax June 2024: {june_mean_c:.1f} °C")
 
 
+def shard_years() -> list[int]:
+    years = list(YEARS)
+    if "--shard" in sys.argv:
+        k, n = map(int, sys.argv[sys.argv.index("--shard") + 1].split("/"))
+        years = [y for i, y in enumerate(years) if i % n == k]
+    return years
+
+
 def fetch_all(client: cdsapi.Client) -> int:
     months = [f"{m:02d}" for m in range(1, 13)]
     failures = 0
-    for year in YEARS:
+    for year in shard_years():
         for stat, tag in STATS.items():
             out = OUT_DIR / f"era5land_{tag}_{year}.nc"
             if out.exists() and out.stat().st_size > 1_000_000:
