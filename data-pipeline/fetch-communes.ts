@@ -11,12 +11,21 @@
  */
 import { mkdir, writeFile } from "node:fs/promises";
 
+try {
+  process.loadEnvFile(new URL("../.env", import.meta.url).pathname);
+} catch {
+  // .env is optional — the free endpoint works without it, just slower.
+}
+
 const GEO_API =
   "https://geo.api.gouv.fr/communes?zone=metro&format=json" +
   "&fields=nom,code,codeDepartement,codeEpci,population,centre,mairie";
-const ELEVATION_API = "https://api.open-meteo.com/v1/elevation";
+const API_KEY = process.env["OPEN_METEO_API_KEY"];
+const ELEVATION_API = API_KEY
+  ? "https://customer-api.open-meteo.com/v1/elevation"
+  : "https://api.open-meteo.com/v1/elevation";
 const ELEVATION_BATCH = 100;
-const ELEVATION_PAUSE_MS = 700;
+const ELEVATION_PAUSE_MS = API_KEY ? 100 : 700;
 const OUT_FILE = new URL("../data/communes.json", import.meta.url);
 
 interface GeoPoint {
@@ -109,7 +118,8 @@ async function fetchElevations(
     const batch = points.slice(b * ELEVATION_BATCH, (b + 1) * ELEVATION_BATCH);
     const url =
       `${ELEVATION_API}?latitude=${batch.map((p) => p.lat.toFixed(5)).join(",")}` +
-      `&longitude=${batch.map((p) => p.lon.toFixed(5)).join(",")}`;
+      `&longitude=${batch.map((p) => p.lon.toFixed(5)).join(",")}` +
+      (API_KEY ? `&apikey=${API_KEY}` : "");
     try {
       const result = await fetchJson<{ elevation: number[] }>(url);
       for (let i = 0; i < batch.length; i++) {
