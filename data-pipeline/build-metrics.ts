@@ -23,9 +23,13 @@ import {
 const CACHE_DIR = new URL("../data/era5land/", import.meta.url);
 const OUT_FILE = new URL("../data/metrics-preview.json", import.meta.url);
 
+/**
+ * `recent` (last 10 full years) is the primary orientation layer for ranking
+ * and default display; `normals` stays as climate context. METHODOLOGY.md §3.
+ */
 const LAYERS = {
   normals: { from: "1991-01-01", to: "2020-12-31" },
-  recent: { from: "2011-01-01", to: "2025-12-31" },
+  recent: { from: "2016-01-01", to: "2025-12-31" },
 } as const;
 
 interface CachedPayload {
@@ -136,7 +140,7 @@ async function main(): Promise<void> {
       recent: computeLayer(sliceSeries(payload, LAYERS.recent.from, LAYERS.recent.to)),
     });
   }
-  communes.sort((a, b) => (b.normals.jjaTmaxC ?? -99) - (a.normals.jjaTmaxC ?? -99));
+  communes.sort((a, b) => (b.recent.jjaTmaxC ?? -99) - (a.recent.jjaTmaxC ?? -99));
 
   await writeFile(
     OUT_FILE,

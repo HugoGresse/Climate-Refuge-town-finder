@@ -1,6 +1,6 @@
 # Methodology
 
-Version 0.1 — draft. Every pipeline PR must link to the section it implements.
+Version 0.2 — draft. Every pipeline PR must link to the section it implements.
 This document exists so a reviewer can predict what the numbers will say before
 running the code. Changes to definitions here are a new methodology version and
 therefore a new data release.
@@ -45,8 +45,8 @@ therefore a new data release.
 
 | Layer | Source | Period | Why |
 |---|---|---|---|
-| Heat normals | ERA5-Land 0.1°, **pinned model, never `best_match`** | **1991–2020** | WMO climate normal; 5 recent years is weather, not climate (SE of a 5-y JJA mean ≈ 0.5 °C) |
-| Recent experience | ERA5-Land 0.1° | **2011–2025** | What moving there has felt like lately; displayed separately, never averaged with normals |
+| Heat normals (context) | ERA5-Land 0.1°, **pinned model, never `best_match`** | **1991–2020** | WMO climate normal; 5 recent years is weather, not climate (SE of a 5-y JJA mean ≈ 0.5 °C) |
+| **Recent experience (primary orientation)** | ERA5-Land 0.1° | **2016–2025** (last 10 full years) | Product decision (v0.2): ranking and default display follow what living there feels like now. Rankings are robust at 10 y (year-to-year anomalies are spatially coherent, so relative order barely moves); absolute values carry ±0.3–0.4 °C sampling uncertainty and are labelled with their period. Normals stay visible as context, never averaged in. |
 | Extremes | **CERRA ~5.5 km** | **1985–2021** | Extremes need ~30 seasons; ERA5 precipitation (~25 km) area-averages Cévennes episodes away |
 | Projections | Climadiag Commune (if bulk-authorised) else DRIAS-2020 / Explore2 (8 km, ADAMONT bias-corrected) | 20-year windows min | Overlay by warming level (TRACC +2.0 / +2.7 / +4 °C), delta method per model vs its own 1991–2020 baseline; never average daily model series before counting extremes |
 
