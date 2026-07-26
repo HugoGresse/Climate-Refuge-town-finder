@@ -25,12 +25,16 @@ from __future__ import annotations
 import gzip
 import json
 import pathlib
+import ssl
 import sys
 import time
 import urllib.request
 
+import certifi
 import numpy as np
 import xarray as xr
+
+SSL_CONTEXT = ssl.create_default_context(cafile=certifi.where())
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 CDS_DIR = ROOT / "data" / "cds"
@@ -82,7 +86,7 @@ def fetch_node_elevations(nodes: list[tuple[float, float]]) -> dict[str, float]:
         )
         for attempt in range(5):
             try:
-                with urllib.request.urlopen(url, timeout=60) as response:
+                with urllib.request.urlopen(url, timeout=60, context=SSL_CONTEXT) as response:
                     payload = json.loads(response.read())
                 for (lat, lon), elev in zip(batch, payload["elevation"]):
                     cache[f"{lat:.4f}:{lon:.4f}"] = elev
