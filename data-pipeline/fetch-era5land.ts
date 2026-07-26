@@ -29,7 +29,9 @@ const CUSTOMER_HOST = "https://customer-archive-api.open-meteo.com/v1/archive";
 
 const START_DATE = "1991-01-01";
 const END_DATE = "2025-12-31";
-const DAILY_VARS = "temperature_2m_max,temperature_2m_min,precipitation_sum";
+// No precipitation here: ERA5-Land via Open-Meteo serves none (verified —
+// 12 784/12 784 nulls). Heavy-precip metrics come from CERRA (issue #7).
+const DAILY_VARS = "temperature_2m_max,temperature_2m_min";
 const MODEL = "era5_land";
 
 const COMMUNES_FILE = new URL("../data/communes.json", import.meta.url);
@@ -66,7 +68,6 @@ interface ArchiveResponse {
     readonly time: string[];
     readonly temperature_2m_max: (number | null)[];
     readonly temperature_2m_min: (number | null)[];
-    readonly precipitation_sum: (number | null)[];
   };
 }
 

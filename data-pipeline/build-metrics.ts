@@ -40,7 +40,8 @@ interface CachedPayload {
     readonly time: string[];
     readonly temperature_2m_max: (number | null)[];
     readonly temperature_2m_min: (number | null)[];
-    readonly precipitation_sum: (number | null)[];
+    /** Absent in newer caches — ERA5-Land serves no precipitation. */
+    readonly precipitation_sum?: (number | null)[];
   };
 }
 
@@ -59,8 +60,9 @@ interface LayerMetrics {
 }
 
 function sliceSeries(payload: CachedPayload, from: string, to: string): DailySeries {
-  const { time, temperature_2m_max, temperature_2m_min, precipitation_sum } =
-    payload.daily;
+  const { time, temperature_2m_max, temperature_2m_min } = payload.daily;
+  const precipitation_sum =
+    payload.daily.precipitation_sum ?? time.map(() => null);
   const start = time.findIndex((d) => d >= from);
   if (start === -1) {
     return { dates: [], tmax: [], tmin: [], precip: [] };
