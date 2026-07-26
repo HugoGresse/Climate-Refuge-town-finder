@@ -119,9 +119,10 @@ def main() -> None:
     # Grid geometry + static land mask from one reference file.
     ref = xr.open_dataset(CDS_DIR / f"era5land_tmax_{YEARS[0]}.nc")
     var = next(iter(ref.data_vars))
+    tdim = "valid_time" if "valid_time" in ref.dims else "time"
     lats = ref["latitude"].values.astype(np.float64)
     lons = ref["longitude"].values.astype(np.float64)
-    land = np.isfinite(ref[var].isel(time=0).values)  # (lat, lon)
+    land = np.isfinite(ref[var].isel({tdim: 0}).values)  # (lat, lon)
     ref.close()
     dlat = lats[1] - lats[0]
     dlon = lons[1] - lons[0]
@@ -195,7 +196,7 @@ def main() -> None:
             parts.append((interp - KELVIN).astype(np.float32))
             if tag == "tmax":
                 all_dates.extend(
-                    str(d)[:10] for d in ds["time"].values.astype("datetime64[D]")
+                    str(d)[:10] for d in ds[tdim].values.astype("datetime64[D]")
                 )
             ds.close()
         print(f"year {year} done")
