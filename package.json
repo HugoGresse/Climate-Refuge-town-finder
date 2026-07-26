@@ -15,7 +15,9 @@
     "typecheck": "tsc --noEmit && npm run typecheck -w web",
     "dev": "npm run dev -w web",
     "build": "npm run build -w web",
-    "pipeline:communes": "tsx data-pipeline/fetch-communes.ts"
+    "pipeline:communes": "tsx data-pipeline/fetch-communes.ts",
+    "pipeline:era5land": "tsx data-pipeline/fetch-era5land.ts",
+    "pipeline:metrics": "tsx data-pipeline/build-metrics.ts"
   },
   "devDependencies": {
     "@types/node": "^26.1.1",
