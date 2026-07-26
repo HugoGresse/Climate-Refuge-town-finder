@@ -1,0 +1,78 @@
+/* Tokens from DESIGN.md — single accent, warm neutrals, 4px grid, system fonts. */
+:root {
+  --color-primary: #ff6f0f;
+  --color-canvas: #ffffff;
+  --color-background: #f2f3f6;
+  --color-surface: #f7f8fa;
+  --color-foreground: #212124;
+  --color-muted: #868b94;
+  --color-hairline: #eaebee;
+  --color-error: #fa2314;
+  --font-sans:
+    -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue",
+    Arial, sans-serif;
+  --space-sm: 4px;
+  --space-md: 8px;
+  --space-lg: 12px;
+  --space-xl: 16px;
+  --rounded-md: 8px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  margin: 0;
+  height: 100%;
+  font-family: var(--font-sans);
+  color: var(--color-foreground);
+  background: var(--color-background);
+}
+
+#app {
+  display: flex;
+  flex-direction: column;
+}
+
+.topbar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-lg);
+  padding: var(--space-lg) var(--space-xl);
+  background: var(--color-canvas);
+  border-bottom: 1px solid var(--color-hairline);
+}
+
+.topbar h1 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 135%;
+}
+
+.topbar .status {
+  font-size: 13px;
+  color: var(--color-muted);
+}
+
+.map-container {
+  flex: 1;
+  min-height: 0;
+}
+
+.data-notice {
+  position: absolute;
+  inset: auto auto 40px 12px;
+  z-index: 5;
+  max-width: 320px;
+  padding: var(--space-md) var(--space-lg);
+  background: var(--color-canvas);
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--rounded-md);
+  font-size: 13px;
+  line-height: 150%;
+  color: var(--color-muted);
+}

@@ -1,0 +1,26 @@
+{
+  "name": "climate-refuge-town-finder",
+  "private": true,
+  "version": "0.0.1",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "workspaces": [
+    "web"
+  ],
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit && npm run typecheck -w web",
+    "dev": "npm run dev -w web",
+    "build": "npm run build -w web",
+    "pipeline:communes": "tsx data-pipeline/fetch-communes.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^26.1.1",
+    "tsx": "^4.23.1",
+    "typescript": "^7.0.2",
+    "vitest": "^4.1.10"
+  }
+}
