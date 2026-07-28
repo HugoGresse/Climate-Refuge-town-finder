@@ -1,5 +1,5 @@
 import "./style.css";
-import { createMap } from "./map";
+import { addCommuneLayer, createMap, legendHtml } from "./map";
 
 const app = document.querySelector<HTMLDivElement>("#app");
 if (!app) {
@@ -9,19 +9,37 @@ if (!app) {
 app.innerHTML = `
   <header class="topbar">
     <h1>Climat &amp; risques — communes françaises</h1>
-    <span class="status">prototype — aucune donnée climatique chargée</span>
+    <span class="status" id="status">chargement…</span>
   </header>
   <div class="map-container" id="map"></div>
+  <aside class="legend" id="legend"></aside>
   <aside class="data-notice">
     Outil d'information et de comparaison, pas un avis immobilier ou
-    assurantiel. Les indicateurs arriveront région par région — voir la
-    méthodologie dans le dépôt.
+    assurantiel. Estimations maillées à l'échelle communale — consultez le
+    rapport Géorisques à l'adresse avant toute décision.
   </aside>
 `;
 
 const mapContainer = document.querySelector<HTMLDivElement>("#map");
-if (!mapContainer) {
-  throw new Error("#map container missing");
+const status = document.querySelector<HTMLSpanElement>("#status");
+const legend = document.querySelector<HTMLElement>("#legend");
+if (!mapContainer || !status || !legend) {
+  throw new Error("layout containers missing");
 }
 
-createMap(mapContainer);
+const map = createMap(mapContainer);
+if (import.meta.env.DEV) {
+  Object.assign(window, { __map: map });
+}
+map.on("load", () => {
+  addCommuneLayer(map)
+    .then((dataset) => {
+      status.textContent =
+        `${dataset.meta.count} communes pilotes — été 2016–2025, ERA5-Land`;
+      legend.innerHTML = legendHtml();
+    })
+    .catch((error: unknown) => {
+      status.textContent = "données indisponibles";
+      console.error(error);
+    });
+});

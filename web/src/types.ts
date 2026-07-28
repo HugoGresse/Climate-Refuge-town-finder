@@ -1,0 +1,28 @@
+export interface CommuneEntry {
+  readonly insee: string;
+  readonly name: string;
+  readonly dept: string;
+  readonly lat: number;
+  readonly lon: number;
+  readonly pop: number | null;
+  readonly elev: number | null;
+  /** JJA mean Tmax 2016–2025 — primary orientation layer. */
+  readonly jjaRecent: number;
+  readonly jjaNormals: number | null;
+  readonly cdd: number | null;
+  readonly tropN: number | null;
+  readonly d30: number | null;
+  readonly d35: number | null;
+  readonly floods: number;
+  readonly floods2000: number;
+  readonly lastFlood: string | null;
+  readonly ppri: string | null;
+  readonly azi: boolean;
+}
+
+export interface Dataset {
+  readonly meta: { readonly count: number; readonly model: string };
+  readonly communes: readonly CommuneEntry[];
+}
+
+export const ORIGIN_INSEE = "34172"; // Montpellier — default origin, picker later
