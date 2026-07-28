@@ -108,69 +108,84 @@ def missing_targets() -> list[tuple[str, str, int]]:
 
 
 MAX_INFLIGHT = 3  # CDS rejects per-user queued jobs beyond a small cap (observed ~3)
+POLL_SECONDS = 120
+COOLDOWN_MIN_S = 300
+COOLDOWN_MAX_S = 3600
 
 
 def pump() -> None:
     """Keep up to MAX_INFLIGHT jobs queued; poll, download, top up, repeat.
 
-    A 404 on poll means the server rejected/expired the job (per-user queue
-    cap) — the job is dropped and its file resubmitted when a slot frees.
+    Polite by design — CDS explicitly asks scripts to respect the per-dataset
+    queue limit: at most one new submission per cycle, and any rejection
+    (404 on poll or refused submit) triggers an exponential submission
+    cooldown, reset when a download succeeds.
     """
     from cdsapi.api import Result
 
     client = cdsapi.Client(quiet=True, wait_until_complete=False, delete=False)
     months = [f"{m:02d}" for m in range(1, 13)]
+    cooldown_s = 0
+    submit_gate = 0.0
     while True:
         jobs: dict[str, str] = (
             json.loads(JOBS_FILE.read_text()) if JOBS_FILE.exists() else {}
         )
         missing = missing_targets()
         if not missing:
-            print("all files downloaded")
+            print("all files downloaded", flush=True)
             return
         missing_names = {name for name, _, _ in missing}
         jobs = {n: j for n, j in jobs.items() if n in missing_names}
 
-        inflight: dict[str, str] = {}
+        alive: dict[str, str] = {}
+        rejected = False
         for name, job_id in list(jobs.items()):
             result = Result(client, {"request_id": job_id})
             try:
                 result.update()
             except Exception as error:  # noqa: BLE001
-                # 404 = rejected/expired server-side; anything else treated the
-                # same way — the job will simply be resubmitted.
                 print(f"dropping {name}: {error}", file=sys.stderr)
                 del jobs[name]
+                rejected = True
                 continue
             state = result.reply.get("state", "?")
             if state == "completed":
                 result.download(str(OUT_DIR / name))
-                print(f"downloaded {name}")
+                print(f"downloaded {name}", flush=True)
                 del jobs[name]
+                cooldown_s = 0
             elif state in ("failed", "denied", "rejected", "deleted"):
-                print(f"job {state} for {name} — will resubmit", file=sys.stderr)
+                print(f"job {state} for {name} — will resubmit later", file=sys.stderr)
                 del jobs[name]
+                rejected = True
             else:
-                inflight[name] = state
+                alive[name] = state
 
-        for name, stat, year in missing_targets():
-            if len(inflight) >= MAX_INFLIGHT:
-                break
-            if name in jobs:
-                continue
-            try:
-                result = client.retrieve(DATASET, build_request(year, months, stat))
-            except Exception as error:  # noqa: BLE001
-                print(f"submit refused for {name}: {error}", file=sys.stderr)
-                break
-            jobs[name] = result.reply["request_id"]
-            inflight[name] = "submitted"
-            print(f"queued {name} → {jobs[name]}")
+        now = time.monotonic()
+        if rejected:
+            cooldown_s = min(max(COOLDOWN_MIN_S, cooldown_s * 2), COOLDOWN_MAX_S)
+            submit_gate = now + cooldown_s
+            print(f"submission cooldown {cooldown_s}s (per-dataset queue limit)", flush=True)
+
+        if now >= submit_gate and len(alive) < MAX_INFLIGHT:
+            for name, stat, year in missing_targets():
+                if name in jobs:
+                    continue
+                try:
+                    result = client.retrieve(DATASET, build_request(year, months, stat))
+                    jobs[name] = result.reply["request_id"]
+                    print(f"queued {name} → {jobs[name]}", flush=True)
+                except Exception as error:  # noqa: BLE001
+                    print(f"submit refused for {name}: {error}", file=sys.stderr)
+                    cooldown_s = min(max(COOLDOWN_MIN_S, cooldown_s * 2), COOLDOWN_MAX_S)
+                    submit_gate = time.monotonic() + cooldown_s
+                break  # at most one submission per cycle
 
         JOBS_FILE.write_text(json.dumps(jobs, indent=1))
         done = len(list(OUT_DIR.glob("era5land_*.nc")))
-        print(f"{done}/70 files · in flight: {inflight}")
-        time.sleep(90)
+        print(f"{done}/70 files · alive: {alive}", flush=True)
+        time.sleep(POLL_SECONDS)
 
 
 def main() -> None:
