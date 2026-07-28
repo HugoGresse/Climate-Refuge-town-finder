@@ -10,13 +10,12 @@ be self-inflicted pain. The product code stays TypeScript.
 
 Usage:
   .venv-etl/bin/python data-pipeline/fetch_era5land_cds.py --probe
-  .venv-etl/bin/python data-pipeline/fetch_era5land_cds.py                # sequential
-  .venv-etl/bin/python data-pipeline/fetch_era5land_cds.py --submit-all  # queue all jobs
-  .venv-etl/bin/python data-pipeline/fetch_era5land_cds.py --collect     # poll + download
+  .venv-etl/bin/python data-pipeline/fetch_era5land_cds.py          # sequential
+  .venv-etl/bin/python data-pipeline/fetch_era5land_cds.py --pump   # capped async loop
 
-The submit/collect pair exists because the CDS queue is shared and often
-congested: one job per queue slot pipelines terribly, so we hold a queue
-position for every missing file at once, then poll.
+The pump exists because the shared CDS queue is often congested and the
+per-user queue cap is small: it keeps MAX_INFLIGHT jobs queued at all
+times, downloads completions, and resubmits rejected jobs.
 """
 
 from __future__ import annotations
@@ -108,58 +107,70 @@ def missing_targets() -> list[tuple[str, str, int]]:
     return targets
 
 
-def submit_all() -> None:
-    """Submit one async job per missing file; job ids saved for --collect."""
-    client = cdsapi.Client(quiet=True, wait_until_complete=False, delete=False)
-    months = [f"{m:02d}" for m in range(1, 13)]
-    jobs: dict[str, str] = json.loads(JOBS_FILE.read_text()) if JOBS_FILE.exists() else {}
-    submitted = 0
-    for name, stat, year in missing_targets():
-        if name in jobs:
-            continue
-        result = client.retrieve(DATASET, build_request(year, months, stat))
-        jobs[name] = result.reply["request_id"]
-        submitted += 1
-        JOBS_FILE.write_text(json.dumps(jobs, indent=1))
-        print(f"queued {name} → {jobs[name]}")
-    print(f"submitted {submitted} new jobs ({len(jobs)} tracked)")
+MAX_INFLIGHT = 3  # CDS rejects per-user queued jobs beyond a small cap (observed ~3)
 
 
-def collect() -> None:
-    """Poll tracked jobs, download completed files, until all resolve."""
+def pump() -> None:
+    """Keep up to MAX_INFLIGHT jobs queued; poll, download, top up, repeat.
+
+    A 404 on poll means the server rejected/expired the job (per-user queue
+    cap) — the job is dropped and its file resubmitted when a slot frees.
+    """
     from cdsapi.api import Result
 
     client = cdsapi.Client(quiet=True, wait_until_complete=False, delete=False)
+    months = [f"{m:02d}" for m in range(1, 13)]
     while True:
-        jobs: dict[str, str] = json.loads(JOBS_FILE.read_text())
-        pending = {
-            name: job_id
-            for name, job_id in jobs.items()
-            if not ((OUT_DIR / name).exists() and (OUT_DIR / name).stat().st_size > 1_000_000)
-        }
-        if not pending:
-            print("all tracked jobs downloaded")
+        jobs: dict[str, str] = (
+            json.loads(JOBS_FILE.read_text()) if JOBS_FILE.exists() else {}
+        )
+        missing = missing_targets()
+        if not missing:
+            print("all files downloaded")
             return
-        states: dict[str, int] = {}
-        for name, job_id in pending.items():
+        missing_names = {name for name, _, _ in missing}
+        jobs = {n: j for n, j in jobs.items() if n in missing_names}
+
+        inflight: dict[str, str] = {}
+        for name, job_id in list(jobs.items()):
             result = Result(client, {"request_id": job_id})
             try:
                 result.update()
             except Exception as error:  # noqa: BLE001
-                print(f"poll failed for {name}: {error}", file=sys.stderr)
+                # 404 = rejected/expired server-side; anything else treated the
+                # same way — the job will simply be resubmitted.
+                print(f"dropping {name}: {error}", file=sys.stderr)
+                del jobs[name]
                 continue
             state = result.reply.get("state", "?")
-            states[state] = states.get(state, 0) + 1
             if state == "completed":
                 result.download(str(OUT_DIR / name))
                 print(f"downloaded {name}")
-            elif state in ("failed", "denied", "rejected", "deleted"):
-                print(f"job {state} for {name} — dropping for resubmit", file=sys.stderr)
                 del jobs[name]
-                JOBS_FILE.write_text(json.dumps(jobs, indent=1))
+            elif state in ("failed", "denied", "rejected", "deleted"):
+                print(f"job {state} for {name} — will resubmit", file=sys.stderr)
+                del jobs[name]
+            else:
+                inflight[name] = state
+
+        for name, stat, year in missing_targets():
+            if len(inflight) >= MAX_INFLIGHT:
+                break
+            if name in jobs:
+                continue
+            try:
+                result = client.retrieve(DATASET, build_request(year, months, stat))
+            except Exception as error:  # noqa: BLE001
+                print(f"submit refused for {name}: {error}", file=sys.stderr)
+                break
+            jobs[name] = result.reply["request_id"]
+            inflight[name] = "submitted"
+            print(f"queued {name} → {jobs[name]}")
+
+        JOBS_FILE.write_text(json.dumps(jobs, indent=1))
         done = len(list(OUT_DIR.glob("era5land_*.nc")))
-        print(f"{done}/70 files · queue states: {states}")
-        time.sleep(120)
+        print(f"{done}/70 files · in flight: {inflight}")
+        time.sleep(90)
 
 
 def main() -> None:
@@ -167,10 +178,8 @@ def main() -> None:
     try:
         if "--probe" in sys.argv:
             probe(cdsapi.Client(quiet=True))
-        elif "--submit-all" in sys.argv:
-            submit_all()
-        elif "--collect" in sys.argv:
-            collect()
+        elif "--pump" in sys.argv:
+            pump()
         else:
             failures = fetch_all(cdsapi.Client(quiet=True))
             print(f"fetch finished, {failures} failures")
