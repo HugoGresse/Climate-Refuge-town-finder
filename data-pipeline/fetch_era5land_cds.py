@@ -107,6 +107,32 @@ def missing_targets() -> list[tuple[str, str, int]]:
     return targets
 
 
+def place_orphan(tmp: pathlib.Path) -> str:
+    """Identify an adopted job's content (year + statistic) and rename it.
+
+    July land means separate the two statistics unambiguously
+    (Tmax ≈ 26 °C vs Tmin ≈ 14 °C over the France bbox).
+    """
+    import numpy as np
+    import xarray as xr
+
+    ds = xr.open_dataset(tmp)
+    tdim = "valid_time" if "valid_time" in ds.dims else "time"
+    var = next(iter(ds.data_vars))
+    times = [str(t) for t in ds[tdim].values]
+    year = int(times[0][:4])
+    july = [i for i, t in enumerate(times) if t[5:7] == "07"]
+    july_mean_c = float(np.nanmean(ds[var].isel({tdim: july}).values)) - 273.15
+    ds.close()
+    tag = "tmax" if july_mean_c > 20 else "tmin"
+    final = OUT_DIR / f"era5land_{tag}_{year}.nc"
+    if final.exists():
+        tmp.unlink()
+        return f"duplicate of {final.name}, discarded"
+    tmp.rename(final)
+    return final.name
+
+
 MAX_INFLIGHT = 3  # CDS rejects per-user queued jobs beyond a small cap (observed ~3)
 POLL_SECONDS = 120
 COOLDOWN_MIN_S = 300
@@ -127,6 +153,9 @@ def pump() -> None:
     months = [f"{m:02d}" for m in range(1, 13)]
     cooldown_s = 0
     submit_gate = 0.0
+    submit_allowed = "--no-submit" not in sys.argv
+    if not submit_allowed:
+        print("poll-only mode: no new submissions", flush=True)
     while True:
         jobs: dict[str, str] = (
             json.loads(JOBS_FILE.read_text()) if JOBS_FILE.exists() else {}
@@ -136,7 +165,11 @@ def pump() -> None:
             print("all files downloaded", flush=True)
             return
         missing_names = {name for name, _, _ in missing}
-        jobs = {n: j for n, j in jobs.items() if n in missing_names}
+        jobs = {
+            n: j
+            for n, j in jobs.items()
+            if n in missing_names or n.startswith("orphan_")
+        }
 
         alive: dict[str, str] = {}
         rejected = False
@@ -152,7 +185,11 @@ def pump() -> None:
             state = result.reply.get("state", "?")
             if state == "completed":
                 result.download(str(OUT_DIR / name))
-                print(f"downloaded {name}", flush=True)
+                if name.startswith("orphan_"):
+                    placed = place_orphan(OUT_DIR / name)
+                    print(f"downloaded orphan → {placed}", flush=True)
+                else:
+                    print(f"downloaded {name}", flush=True)
                 del jobs[name]
                 cooldown_s = 0
             elif state in ("failed", "denied", "rejected", "deleted"):
@@ -168,7 +205,7 @@ def pump() -> None:
             submit_gate = now + cooldown_s
             print(f"submission cooldown {cooldown_s}s (per-dataset queue limit)", flush=True)
 
-        if now >= submit_gate and len(alive) < MAX_INFLIGHT:
+        if submit_allowed and now >= submit_gate and len(alive) < MAX_INFLIGHT:
             for name, stat, year in missing_targets():
                 if name in jobs:
                     continue
