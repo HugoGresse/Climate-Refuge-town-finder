@@ -10,13 +10,21 @@ be self-inflicted pain. The product code stays TypeScript.
 
 Usage:
   .venv-etl/bin/python data-pipeline/fetch_era5land_cds.py --probe
-  .venv-etl/bin/python data-pipeline/fetch_era5land_cds.py
+  .venv-etl/bin/python data-pipeline/fetch_era5land_cds.py                # sequential
+  .venv-etl/bin/python data-pipeline/fetch_era5land_cds.py --submit-all  # queue all jobs
+  .venv-etl/bin/python data-pipeline/fetch_era5land_cds.py --collect     # poll + download
+
+The submit/collect pair exists because the CDS queue is shared and often
+congested: one job per queue slot pipelines terribly, so we hold a queue
+position for every missing file at once, then poll.
 """
 
 from __future__ import annotations
 
+import json
 import pathlib
 import sys
+import time
 
 import cdsapi
 
@@ -86,14 +94,85 @@ def fetch_all(client: cdsapi.Client) -> int:
     return failures
 
 
+JOBS_FILE = OUT_DIR / "jobs.json"
+
+
+def missing_targets() -> list[tuple[str, str, int]]:
+    """(filename, statistic, year) for every file not yet downloaded."""
+    targets = []
+    for year in YEARS:
+        for stat, tag in STATS.items():
+            out = OUT_DIR / f"era5land_{tag}_{year}.nc"
+            if not (out.exists() and out.stat().st_size > 1_000_000):
+                targets.append((out.name, stat, year))
+    return targets
+
+
+def submit_all() -> None:
+    """Submit one async job per missing file; job ids saved for --collect."""
+    client = cdsapi.Client(quiet=True, wait_until_complete=False, delete=False)
+    months = [f"{m:02d}" for m in range(1, 13)]
+    jobs: dict[str, str] = json.loads(JOBS_FILE.read_text()) if JOBS_FILE.exists() else {}
+    submitted = 0
+    for name, stat, year in missing_targets():
+        if name in jobs:
+            continue
+        result = client.retrieve(DATASET, build_request(year, months, stat))
+        jobs[name] = result.reply["request_id"]
+        submitted += 1
+        JOBS_FILE.write_text(json.dumps(jobs, indent=1))
+        print(f"queued {name} → {jobs[name]}")
+    print(f"submitted {submitted} new jobs ({len(jobs)} tracked)")
+
+
+def collect() -> None:
+    """Poll tracked jobs, download completed files, until all resolve."""
+    from cdsapi.api import Result
+
+    client = cdsapi.Client(quiet=True, wait_until_complete=False, delete=False)
+    while True:
+        jobs: dict[str, str] = json.loads(JOBS_FILE.read_text())
+        pending = {
+            name: job_id
+            for name, job_id in jobs.items()
+            if not ((OUT_DIR / name).exists() and (OUT_DIR / name).stat().st_size > 1_000_000)
+        }
+        if not pending:
+            print("all tracked jobs downloaded")
+            return
+        states: dict[str, int] = {}
+        for name, job_id in pending.items():
+            result = Result(client, {"request_id": job_id})
+            try:
+                result.update()
+            except Exception as error:  # noqa: BLE001
+                print(f"poll failed for {name}: {error}", file=sys.stderr)
+                continue
+            state = result.reply.get("state", "?")
+            states[state] = states.get(state, 0) + 1
+            if state == "completed":
+                result.download(str(OUT_DIR / name))
+                print(f"downloaded {name}")
+            elif state in ("failed", "denied", "rejected", "deleted"):
+                print(f"job {state} for {name} — dropping for resubmit", file=sys.stderr)
+                del jobs[name]
+                JOBS_FILE.write_text(json.dumps(jobs, indent=1))
+        done = len(list(OUT_DIR.glob("era5land_*.nc")))
+        print(f"{done}/70 files · queue states: {states}")
+        time.sleep(120)
+
+
 def main() -> None:
     OUT_DIR.mkdir(parents=True, exist_ok=True)
-    client = cdsapi.Client(quiet=True)
     try:
         if "--probe" in sys.argv:
-            probe(client)
+            probe(cdsapi.Client(quiet=True))
+        elif "--submit-all" in sys.argv:
+            submit_all()
+        elif "--collect" in sys.argv:
+            collect()
         else:
-            failures = fetch_all(client)
+            failures = fetch_all(cdsapi.Client(quiet=True))
             print(f"fetch finished, {failures} failures")
             sys.exit(1 if failures else 0)
     except Exception:
