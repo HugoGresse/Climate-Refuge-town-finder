@@ -68,7 +68,11 @@ export function popupHtml(c: CommuneEntry, origin: CommuneEntry | null): string 
   return `
     <div class="popup">
       <h2>${esc(c.name)} <span class="muted">(${c.dept})</span></h2>
-      <div class="muted small">${c.elev ?? "?"} m · ${c.pop?.toLocaleString("fr-FR") ?? "?"} hab.</div>
+      <div class="muted small">${c.elev ?? "?"} m · ${c.pop?.toLocaleString("fr-FR") ?? "?"} hab.${
+        c.trend == null
+          ? ""
+          : ` (${c.trend >= 0 ? "+" : "−"}${Math.abs(c.trend).toFixed(1)} %/an)`
+      }</div>
       ${bandLine(c, o)}
       ${row("Tmax été 2016–2025", `${c.jjaRecent.toFixed(1)} °C ${delta(c.jjaRecent, o?.jjaRecent ?? null, o?.name ?? "")}`)}
       ${row("Normale 1991–2020", c.jjaNormals == null ? "—" : `${c.jjaNormals.toFixed(1)} °C`)}

@@ -35,6 +35,9 @@ CODES = {
 }
 
 
+POP_PARQUET = ROOT / "data" / "hazard-src" / "poplegales.parquet"
+
+
 def main() -> None:
     con = duckdb.connect()
     rows = con.execute(
@@ -44,12 +47,28 @@ def main() -> None:
         )
     ).fetchall()
 
-    communes: dict[str, dict[str, int]] = {}
+    communes: dict[str, dict[str, float]] = {}
     code_to_key = {c: key for key, codes in CODES.items() for c in codes}
     for depcom, typequ, count in rows:
         key = code_to_key[typequ]
         commune = communes.setdefault(depcom, {})
         commune[key] = commune.get(key, 0) + count
+
+    # Annualised population trend from the 2017 and 2021 legal populations
+    # (icem7 compilation of INSEE vintages, Licence Ouverte).
+    if POP_PARQUET.exists():
+        trend_rows = con.execute(
+            f"""
+            SELECT a.codgeo,
+                   POWER(b.pmun::DOUBLE / a.pmun, 0.25) - 1
+            FROM (SELECT codgeo, pmun FROM '{POP_PARQUET}' WHERE annee_rp = '2017' AND pmun > 0) a
+            JOIN (SELECT codgeo, pmun FROM '{POP_PARQUET}' WHERE annee_rp = '2021' AND pmun > 0) b
+            USING (codgeo)
+            """
+        ).fetchall()
+        for codgeo, trend in trend_rows:
+            communes.setdefault(codgeo, {})["trendPctYr"] = round(trend * 100, 2)
+        print(f"population trend attached for {len(trend_rows)} communes")
 
     OUT.write_text(
         json.dumps(

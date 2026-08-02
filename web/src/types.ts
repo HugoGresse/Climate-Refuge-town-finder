@@ -28,6 +28,8 @@ export interface CommuneEntry {
   readonly station: boolean;
   readonly lycee: boolean;
   readonly superm: boolean;
+  /** Annualised population trend 2017→2021, in %/yr. */
+  readonly trend: number | null;
   /** National heat-burden percentile (0 = coolest, 100 = hottest). */
   readonly hPct: number | null;
   /** National flood-history percentile. */

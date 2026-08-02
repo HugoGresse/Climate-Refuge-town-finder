@@ -108,6 +108,7 @@ async function main(): Promise<void> {
         station: (livability.communes[m.insee]?.["station"] ?? 0) > 0,
         lycee: (livability.communes[m.insee]?.["lycee"] ?? 0) > 0,
         superm: (livability.communes[m.insee]?.["supermarket"] ?? 0) > 0,
+        trend: livability.communes[m.insee]?.["trendPctYr"] ?? null,
       },
     ];
   });
