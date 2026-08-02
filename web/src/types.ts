@@ -28,6 +28,10 @@ export interface CommuneEntry {
   readonly station: boolean;
   readonly lycee: boolean;
   readonly superm: boolean;
+  /** National heat-burden percentile (0 = coolest, 100 = hottest). */
+  readonly hPct: number | null;
+  /** National flood-history percentile. */
+  readonly fPct: number | null;
 }
 
 export interface Dataset {

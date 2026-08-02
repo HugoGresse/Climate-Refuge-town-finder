@@ -212,6 +212,11 @@ body,
   padding: var(--space-lg) var(--space-xl);
 }
 
+.popup .band {
+  margin: var(--space-sm) 0;
+  line-height: 150%;
+}
+
 .popup h2 {
   margin: 0 0 var(--space-sm);
   font-size: 15px;

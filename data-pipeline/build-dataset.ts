@@ -6,6 +6,7 @@
  * Usage: npm run pipeline:dataset   (after pipeline:metrics and pipeline:hazards)
  */
 import { readFile, mkdir, writeFile } from "node:fs/promises";
+import { percentileRanks } from "../src/lib/normalise.js";
 
 const COMMUNES_FILE = new URL("../data/communes.json", import.meta.url);
 const METRICS_FILE = new URL("../data/metrics-preview.json", import.meta.url);
@@ -111,6 +112,24 @@ async function main(): Promise<void> {
     ];
   });
 
+  // National burden percentiles (methodology §6: national, never per-circle).
+  // Heat sub-index collapses the correlated day/night indicators: mean of the
+  // CDD18 percentile (linear backbone) and the tropical-nights percentile.
+  const cddPct = percentileRanks(communes.map((c) => c.cdd));
+  const tropPct = percentileRanks(communes.map((c) => c.tropN));
+  const floodPct = percentileRanks(communes.map((c) => c.floods));
+  const withPct = communes.map((c, i) => {
+    const cdd = cddPct[i];
+    const trop = tropPct[i];
+    const heat =
+      cdd != null && trop != null ? Math.round((cdd + trop) / 2) : null;
+    return {
+      ...c,
+      hPct: heat,
+      fPct: floodPct[i] == null ? null : Math.round(floodPct[i]!),
+    };
+  });
+
   await mkdir(new URL(".", OUT_FILE), { recursive: true });
   await writeFile(
     OUT_FILE,
@@ -120,13 +139,13 @@ async function main(): Promise<void> {
         layers: metrics.meta.layers,
         model: "era5_land (pinned)",
         hazardsSource: hazards.meta.source,
-        count: communes.length,
+        count: withPct.length,
       },
-      communes,
+      communes: withPct,
     }),
   );
   console.log(
-    `wrote dataset.json: ${communes.length} communes` +
+    `wrote dataset.json: ${withPct.length} communes` +
       (excluded.length ? ` (${excluded.length} excluded for coverage)` : ""),
   );
 }

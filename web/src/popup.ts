@@ -26,6 +26,28 @@ function services(c: CommuneEntry): string {
   return items.length > 0 ? items.join(" · ") : "aucun recensé (BPE)";
 }
 
+/** Tie band: differences under 0.5 °C are statistically meaningless here. */
+function bandLine(c: CommuneEntry, o: CommuneEntry | null): string {
+  const pct =
+    c.hPct == null
+      ? ""
+      : `Chaleur : ${c.hPct}ᵉ centile national` +
+        (c.fPct == null ? "" : ` · Inondations : ${c.fPct}ᵉ`);
+  if (!o || o.insee === c.insee) {
+    return pct ? `<div class="band muted small">${pct}</div>` : "";
+  }
+  const diff = c.jjaRecent - o.jjaRecent;
+  const label =
+    Math.abs(diff) < 0.5
+      ? `été similaire à ${esc(o.name)}`
+      : diff < 0
+        ? `${Math.abs(diff) >= 2 ? "nettement " : ""}plus frais que ${esc(o.name)}`
+        : `${diff >= 2 ? "nettement " : ""}plus chaud que ${esc(o.name)}`;
+  return `<div class="band small"><strong>${label}</strong>${
+    pct ? ` <span class="muted">· ${pct}</span>` : ""
+  }</div>`;
+}
+
 export function popupHtml(c: CommuneEntry, origin: CommuneEntry | null): string {
   const o = origin && origin.insee !== c.insee ? origin : null;
   const flood =
@@ -47,6 +69,7 @@ export function popupHtml(c: CommuneEntry, origin: CommuneEntry | null): string 
     <div class="popup">
       <h2>${esc(c.name)} <span class="muted">(${c.dept})</span></h2>
       <div class="muted small">${c.elev ?? "?"} m · ${c.pop?.toLocaleString("fr-FR") ?? "?"} hab.</div>
+      ${bandLine(c, o)}
       ${row("Tmax été 2016–2025", `${c.jjaRecent.toFixed(1)} °C ${delta(c.jjaRecent, o?.jjaRecent ?? null, o?.name ?? "")}`)}
       ${row("Normale 1991–2020", c.jjaNormals == null ? "—" : `${c.jjaNormals.toFixed(1)} °C`)}
       ${row("Nuits tropicales/an", c.tropN == null ? "—" : `${c.tropN.toFixed(0)} ${delta(c.tropN, o?.tropN ?? null, o?.name ?? "")}`)}
