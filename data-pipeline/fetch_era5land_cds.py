@@ -109,11 +109,13 @@ def missing_targets() -> list[tuple[str, str, int]]:
     return targets
 
 
-def build_hourly_request(year: int) -> dict:
+def build_hourly_request(year: int, month: int) -> dict:
+    # Monthly granularity: a full hourly year exceeds the per-request cost
+    # limit on reanalysis-era5-land ("cost limits exceeded", 403).
     return {
         "variable": ["2m_temperature"],
         "year": str(year),
-        "month": [f"{m:02d}" for m in range(1, 13)],
+        "month": f"{month:02d}",
         "day": [f"{d:02d}" for d in range(1, 32)],
         "time": [f"{h:02d}:00" for h in range(24)],
         "area": AREA,
@@ -121,17 +123,20 @@ def build_hourly_request(year: int) -> dict:
     }
 
 
-def missing_targets_hourly() -> list[tuple[str, str, int]]:
-    """Hourly year files still needed — a year whose daily tmax+tmin already
-    exist (aggregated or from the daily-stats path) is skipped."""
+def missing_targets_hourly() -> list[tuple[str, int, int]]:
+    """(filename, year, month) of hourly month files still needed — months of
+    a year whose daily tmax+tmin already exist are skipped."""
     targets = []
     for year in YEARS:
         have_daily = all(
             (OUT_DIR / f"era5land_{tag}_{year}.nc").exists() for tag in STATS.values()
         )
-        out = HOURLY_DIR / f"era5land_hourly_{year}.nc"
-        if not have_daily and not (out.exists() and out.stat().st_size > 50_000_000):
-            targets.append((out.name, "hourly", year))
+        if have_daily:
+            continue
+        for month in range(1, 13):
+            out = HOURLY_DIR / f"era5land_hourly_{year}-{month:02d}.nc"
+            if not (out.exists() and out.stat().st_size > 5_000_000):
+                targets.append((out.name, year, month))
     return targets
 
 
@@ -259,23 +264,30 @@ def pump() -> None:
             print(f"submission cooldown {cooldown_s}s (per-dataset queue limit)", flush=True)
 
         if submit_allowed and now >= submit_gate and len(alive) < max_inflight:
-            for name, stat, year in targets_fn():
+            # Daily-stats mode stays at one submission per cycle (hard-limited
+            # dataset); hourly mode tops up every free slot.
+            budget = (max_inflight - len(alive)) if hourly else 1
+            for name, second, third in targets_fn():
+                if budget <= 0:
+                    break
                 if name in jobs:
                     continue
                 request = (
-                    build_hourly_request(year)
+                    build_hourly_request(second, third)
                     if hourly
-                    else build_request(year, months, stat)
+                    else build_request(third, months, second)
                 )
                 try:
                     result = client.retrieve(dataset, request)
                     jobs[name] = result.reply["request_id"]
+                    alive[name] = "submitted"
+                    budget -= 1
                     print(f"queued {name} → {jobs[name]}", flush=True)
                 except Exception as error:  # noqa: BLE001
                     print(f"submit refused for {name}: {error}", file=sys.stderr)
                     cooldown_s = min(max(COOLDOWN_MIN_S, cooldown_s * 2), COOLDOWN_MAX_S)
                     submit_gate = time.monotonic() + cooldown_s
-                break  # at most one submission per cycle
+                    break
 
         JOBS_FILE.write_text(json.dumps(jobs, indent=1))
         remaining = len(targets_fn())
