@@ -7,12 +7,18 @@ export interface PanelCallbacks {
   onFocus(commune: CommuneEntry): void;
 }
 
+/** -1 is the "ville avec hôpital et gare" preset (livability gate, not size). */
 const POP_PRESETS: [number, string][] = [
   [0, "toutes les communes"],
   [1000, "≥ 1 000 hab."],
   [5000, "≥ 5 000 hab."],
-  [20000, "≥ 20 000 hab."],
+  [-1, "avec hôpital et gare"],
 ];
+
+function passesPreset(c: CommuneEntry, minPop: number): boolean {
+  if (minPop === -1) return c.hosp && c.station;
+  return (c.pop ?? 0) >= minPop;
+}
 
 const strip = (s: string): string =>
   s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
@@ -110,7 +116,7 @@ export function renderPanel(
     const rows = dataset.communes
       .filter(
         (c) =>
-          (c.pop ?? 0) >= state.minPop &&
+          passesPreset(c, state.minPop) &&
           haversineKm(
             { lat: origin.lat, lon: origin.lon },
             { lat: c.lat, lon: c.lon },

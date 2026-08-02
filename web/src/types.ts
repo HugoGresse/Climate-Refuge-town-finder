@@ -21,6 +21,13 @@ export interface CommuneEntry {
   readonly fire: boolean;
   readonly clay: boolean;
   readonly coastal: boolean;
+  readonly hosp: boolean;
+  readonly urg: boolean;
+  readonly gp: number;
+  readonly pharm: boolean;
+  readonly station: boolean;
+  readonly lycee: boolean;
+  readonly superm: boolean;
 }
 
 export interface Dataset {

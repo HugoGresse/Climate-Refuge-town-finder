@@ -10,6 +10,7 @@ import { readFile, mkdir, writeFile } from "node:fs/promises";
 const COMMUNES_FILE = new URL("../data/communes.json", import.meta.url);
 const METRICS_FILE = new URL("../data/metrics-preview.json", import.meta.url);
 const HAZARDS_FILE = new URL("../data/hazards.json", import.meta.url);
+const LIVABILITY_FILE = new URL("../data/livability.json", import.meta.url);
 const OUT_FILE = new URL("../web/public/data/dataset.json", import.meta.url);
 
 const MIN_RECENT_YEARS = 8;
@@ -58,6 +59,11 @@ async function main(): Promise<void> {
     >;
   }>(HAZARDS_FILE);
 
+  const livability = await readJson<{
+    meta: { source: string };
+    communes: Record<string, Record<string, number>>;
+  }>(LIVABILITY_FILE);
+
   const position = new Map(
     referential.communes.map((c) => [c.insee, c] as const),
   );
@@ -94,6 +100,13 @@ async function main(): Promise<void> {
         fire: hazard?.wildfireDdrm ?? false,
         clay: hazard?.clayDdrm ?? false,
         coastal: hazard?.coastalRetreat ?? false,
+        hosp: (livability.communes[m.insee]?.["hospital"] ?? 0) > 0,
+        urg: (livability.communes[m.insee]?.["urgences"] ?? 0) > 0,
+        gp: livability.communes[m.insee]?.["gp"] ?? 0,
+        pharm: (livability.communes[m.insee]?.["pharmacy"] ?? 0) > 0,
+        station: (livability.communes[m.insee]?.["station"] ?? 0) > 0,
+        lycee: (livability.communes[m.insee]?.["lycee"] ?? 0) > 0,
+        superm: (livability.communes[m.insee]?.["supermarket"] ?? 0) > 0,
       },
     ];
   });

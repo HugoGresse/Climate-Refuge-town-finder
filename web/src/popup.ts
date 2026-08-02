@@ -13,6 +13,19 @@ function delta(value: number | null, origin: number | null, originName: string):
 const row = (label: string, value: string): string =>
   `<div class="popup-row"><span>${label}</span><strong>${value}</strong></div>`;
 
+function services(c: CommuneEntry): string {
+  const items = [
+    c.hosp ? "hôpital" : null,
+    c.urg ? "urgences" : null,
+    c.gp > 0 ? `${c.gp} médecin${c.gp > 1 ? "s" : ""}` : null,
+    c.pharm ? "pharmacie" : null,
+    c.station ? "gare" : null,
+    c.lycee ? "lycée" : null,
+    c.superm ? "supermarché" : null,
+  ].filter((s): s is string => s !== null);
+  return items.length > 0 ? items.join(" · ") : "aucun recensé (BPE)";
+}
+
 export function popupHtml(c: CommuneEntry, origin: CommuneEntry | null): string {
   const o = origin && origin.insee !== c.insee ? origin : null;
   const flood =
@@ -40,6 +53,7 @@ export function popupHtml(c: CommuneEntry, origin: CommuneEntry | null): string 
       ${row("Jours ≥ 35 °C/an", c.d35 == null ? "—" : c.d35.toFixed(1))}
       ${row("Degrés-jours clim (CDD18)", c.cdd == null ? "—" : c.cdd.toFixed(0))}
       ${row("Inondations CATNAT depuis 1982", flood)}
+      ${row("Services", services(c))}
       ${badges ? `<div class="popup-badges">${badges}</div>` : ""}
       <div class="muted small disclaimer-line">Estimation maillée ERA5-Land, pas une station.
       <a href="https://www.georisques.gouv.fr/mes-risques/connaitre-les-risques-pres-de-chez-moi?commune=${c.insee}"

@@ -31,7 +31,8 @@ export function readStateFromUrl(): AppState {
       radius !== null && radius >= 25 && radius <= 500
         ? radius
         : DEFAULT_STATE.radiusKm,
-    minPop: minPop !== null && minPop >= 0 ? minPop : DEFAULT_STATE.minPop,
+    // -1 is the "hôpital et gare" livability preset.
+    minPop: minPop !== null && minPop >= -1 ? minPop : DEFAULT_STATE.minPop,
   };
 }
 
