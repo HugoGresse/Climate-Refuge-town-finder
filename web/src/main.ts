@@ -53,41 +53,47 @@ async function start(): Promise<void> {
     Object.assign(window, { __map: map });
   }
 
+  let marker: ReturnType<typeof createOriginMarker> | null = null;
+  const mapReady = (): boolean => !!map.getSource("communes");
+
+  // The panel works from data alone — it must not wait for map tiles.
+  const panel = renderPanel(
+    panelRoot,
+    dataset,
+    () => state,
+    byInsee,
+    {
+      onChange(next) {
+        state = { ...state, ...next };
+        writeStateToUrl(state);
+        const current = origin();
+        if (!current) return;
+        panel.refresh();
+        if (mapReady()) {
+          marker?.setLngLat([current.lon, current.lat]);
+          updateRadiusHighlight(map, dataset, current, state.radiusKm);
+          if (next.originInsee) {
+            map.flyTo({ center: [current.lon, current.lat], zoom: 7.5 });
+          }
+        }
+      },
+      onFocus(commune) {
+        if (!mapReady()) return;
+        map.flyTo({ center: [commune.lon, commune.lat], zoom: 9.5 });
+        showCommunePopup(map, commune, origin());
+      },
+    },
+  );
+  status.textContent =
+    `${dataset.meta.count.toLocaleString("fr-FR")} communes — été 2016–2025, ERA5-Land`;
+  legend.innerHTML = legendHtml();
+
   map.on("load", () => {
     addCommuneLayers(map, dataset, origin);
     const o = origin();
     if (!o) return;
-    const marker = createOriginMarker(map, o);
+    marker = createOriginMarker(map, o);
     updateRadiusHighlight(map, dataset, o, state.radiusKm);
-
-    const panel = renderPanel(
-      panelRoot,
-      dataset,
-      () => state,
-      byInsee,
-      {
-        onChange(next) {
-          state = { ...state, ...next };
-          writeStateToUrl(state);
-          const current = origin();
-          if (!current) return;
-          marker.setLngLat([current.lon, current.lat]);
-          updateRadiusHighlight(map, dataset, current, state.radiusKm);
-          panel.refresh();
-          if (next.originInsee) {
-            map.flyTo({ center: [current.lon, current.lat], zoom: 7.5 });
-          }
-        },
-        onFocus(commune) {
-          map.flyTo({ center: [commune.lon, commune.lat], zoom: 9.5 });
-          showCommunePopup(map, commune, origin());
-        },
-      },
-    );
-
-    status.textContent =
-      `${dataset.meta.count.toLocaleString("fr-FR")} communes — été 2016–2025, ERA5-Land`;
-    legend.innerHTML = legendHtml();
   });
 }
 

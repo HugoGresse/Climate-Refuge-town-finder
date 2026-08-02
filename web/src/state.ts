@@ -15,14 +15,23 @@ export const DEFAULT_STATE: AppState = {
 
 export function readStateFromUrl(): AppState {
   const params = new URLSearchParams(location.search);
-  const radius = Number(params.get("r"));
-  const minPop = Number(params.get("p"));
+  // Number(null) is 0 — an absent parameter must fall back to the default,
+  // not silently mean "no population floor".
+  const num = (key: string): number | null => {
+    const raw = params.get(key);
+    if (raw === null || raw === "") return null;
+    const value = Number(raw);
+    return Number.isFinite(value) ? value : null;
+  };
+  const radius = num("r");
+  const minPop = num("p");
   return {
     originInsee: params.get("o") ?? DEFAULT_STATE.originInsee,
-    radiusKm: Number.isFinite(radius) && radius >= 25 && radius <= 500
-      ? radius
-      : DEFAULT_STATE.radiusKm,
-    minPop: Number.isFinite(minPop) && minPop >= 0 ? minPop : DEFAULT_STATE.minPop,
+    radiusKm:
+      radius !== null && radius >= 25 && radius <= 500
+        ? radius
+        : DEFAULT_STATE.radiusKm,
+    minPop: minPop !== null && minPop >= 0 ? minPop : DEFAULT_STATE.minPop,
   };
 }
 
