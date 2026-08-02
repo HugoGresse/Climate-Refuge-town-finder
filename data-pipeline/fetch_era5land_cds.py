@@ -28,7 +28,9 @@ import time
 import cdsapi
 
 DATASET = "derived-era5-land-daily-statistics"
+DATASET_HOURLY = "reanalysis-era5-land"
 OUT_DIR = pathlib.Path(__file__).resolve().parent.parent / "data" / "cds"
+HOURLY_DIR = OUT_DIR / "hourly"
 AREA = [51.5, -5.5, 41.0, 10.0]  # N, W, S, E — metropolitan France + margin
 YEARS = range(1991, 2026)
 STATS = {"daily_maximum": "tmax", "daily_minimum": "tmin"}
@@ -107,6 +109,48 @@ def missing_targets() -> list[tuple[str, str, int]]:
     return targets
 
 
+def build_hourly_request(year: int) -> dict:
+    return {
+        "variable": ["2m_temperature"],
+        "year": str(year),
+        "month": [f"{m:02d}" for m in range(1, 13)],
+        "day": [f"{d:02d}" for d in range(1, 32)],
+        "time": [f"{h:02d}:00" for h in range(24)],
+        "area": AREA,
+        "format": "netcdf",
+    }
+
+
+def missing_targets_hourly() -> list[tuple[str, str, int]]:
+    """Hourly year files still needed — a year whose daily tmax+tmin already
+    exist (aggregated or from the daily-stats path) is skipped."""
+    targets = []
+    for year in YEARS:
+        have_daily = all(
+            (OUT_DIR / f"era5land_{tag}_{year}.nc").exists() for tag in STATS.values()
+        )
+        out = HOURLY_DIR / f"era5land_hourly_{year}.nc"
+        if not have_daily and not (out.exists() and out.stat().st_size > 50_000_000):
+            targets.append((out.name, "hourly", year))
+    return targets
+
+
+def unwrap_zip(path: pathlib.Path) -> None:
+    """New-CDS netcdf downloads arrive as a zip with one .nc member."""
+    import zipfile
+
+    if not zipfile.is_zipfile(path):
+        return
+    with zipfile.ZipFile(path) as archive:
+        members = [m for m in archive.namelist() if m.endswith(".nc")]
+        if len(members) != 1:
+            raise RuntimeError(f"{path.name}: expected one .nc member, got {members}")
+        tmp = path.with_suffix(".unzip.nc")
+        with archive.open(members[0]) as src, open(tmp, "wb") as dst:
+            dst.write(src.read())
+    tmp.replace(path)
+
+
 def place_orphan(tmp: pathlib.Path) -> str:
     """Identify an adopted job's content (year + statistic) and rename it.
 
@@ -154,13 +198,21 @@ def pump() -> None:
     cooldown_s = 0
     submit_gate = 0.0
     submit_allowed = "--no-submit" not in sys.argv
+    hourly = "--hourly" in sys.argv
+    dataset = DATASET_HOURLY if hourly else DATASET
+    targets_fn = missing_targets_hourly if hourly else missing_targets
+    max_inflight = 6 if hourly else MAX_INFLIGHT
+    out_dir = HOURLY_DIR if hourly else OUT_DIR
+    out_dir.mkdir(parents=True, exist_ok=True)
     if not submit_allowed:
         print("poll-only mode: no new submissions", flush=True)
+    if hourly:
+        print(f"hourly mode: {dataset}, {len(targets_fn())} year files needed", flush=True)
     while True:
         jobs: dict[str, str] = (
             json.loads(JOBS_FILE.read_text()) if JOBS_FILE.exists() else {}
         )
-        missing = missing_targets()
+        missing = targets_fn()
         if not missing:
             print("all files downloaded", flush=True)
             return
@@ -184,9 +236,10 @@ def pump() -> None:
                 continue
             state = result.reply.get("state", "?")
             if state == "completed":
-                result.download(str(OUT_DIR / name))
+                result.download(str(out_dir / name))
+                unwrap_zip(out_dir / name)
                 if name.startswith("orphan_"):
-                    placed = place_orphan(OUT_DIR / name)
+                    placed = place_orphan(out_dir / name)
                     print(f"downloaded orphan → {placed}", flush=True)
                 else:
                     print(f"downloaded {name}", flush=True)
@@ -205,12 +258,17 @@ def pump() -> None:
             submit_gate = now + cooldown_s
             print(f"submission cooldown {cooldown_s}s (per-dataset queue limit)", flush=True)
 
-        if submit_allowed and now >= submit_gate and len(alive) < MAX_INFLIGHT:
-            for name, stat, year in missing_targets():
+        if submit_allowed and now >= submit_gate and len(alive) < max_inflight:
+            for name, stat, year in targets_fn():
                 if name in jobs:
                     continue
+                request = (
+                    build_hourly_request(year)
+                    if hourly
+                    else build_request(year, months, stat)
+                )
                 try:
-                    result = client.retrieve(DATASET, build_request(year, months, stat))
+                    result = client.retrieve(dataset, request)
                     jobs[name] = result.reply["request_id"]
                     print(f"queued {name} → {jobs[name]}", flush=True)
                 except Exception as error:  # noqa: BLE001
@@ -220,8 +278,8 @@ def pump() -> None:
                 break  # at most one submission per cycle
 
         JOBS_FILE.write_text(json.dumps(jobs, indent=1))
-        done = len(list(OUT_DIR.glob("era5land_*.nc")))
-        print(f"{done}/70 files · alive: {alive}", flush=True)
+        remaining = len(targets_fn())
+        print(f"remaining targets: {remaining} · alive: {alive}", flush=True)
         time.sleep(POLL_SECONDS)
 
 
