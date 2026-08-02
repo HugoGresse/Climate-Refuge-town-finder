@@ -89,6 +89,24 @@ function sliceSeries(payload: CachedPayload, from: string, to: string): DailySer
 const round1 = (v: number | null | undefined): number | null =>
   v == null ? null : Math.round(v * 10) / 10;
 
+/** A "normals" layer needs most of 1991–2020 — a 2015+ archive must not
+ * impersonate a 30-year normal. */
+const MIN_NORMALS_YEARS = 20;
+
+const EMPTY_LAYER: LayerMetrics = {
+  jjaTmaxC: null,
+  cdd18: null,
+  tropicalNights: null,
+  days30: null,
+  days35: null,
+  spell35Mean: null,
+  spell35Max: null,
+  rx1dayMm: null,
+  rx1dayDate: null,
+  heavyRainDays40: null,
+  yearsUsed: null,
+};
+
 function computeLayer(series: DailySeries): LayerMetrics {
   const jja = jjaMeanTmax(series);
   const cdd = cdd18PerYear(series);
@@ -136,7 +154,12 @@ async function main(): Promise<void> {
       dept: payload.meta.dept,
       elevationM: payload.meta.requested.elevationM,
       gridElevationM: payload.meta.grid.elevation,
-      normals: computeLayer(sliceSeries(payload, LAYERS.normals.from, LAYERS.normals.to)),
+      normals: ((): LayerMetrics => {
+        const layer = computeLayer(
+          sliceSeries(payload, LAYERS.normals.from, LAYERS.normals.to),
+        );
+        return (layer.yearsUsed ?? 0) >= MIN_NORMALS_YEARS ? layer : EMPTY_LAYER;
+      })(),
       recent: computeLayer(sliceSeries(payload, LAYERS.recent.from, LAYERS.recent.to)),
     });
   }
