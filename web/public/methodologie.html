@@ -55,9 +55,17 @@
   <p>Hôpital, urgences, médecins, pharmacie, gare, lycée, supermarché — le filtre
   « avec hôpital et gare » évite de recommander un hameau sans services.</p>
 
+  <h2>Validation contre les stations Météo-France</h2>
+  <p>162 stations (8 départements, altitudes 0 à 1 500 m+, appariement à altitude
+  comparable) : biais moyen de <strong>−0,8 à −1,8 °C</strong> selon la bande
+  d'altitude, RMSE ≤ 2,0 °C. Le biais est <em>uniforme</em> : les valeurs
+  absolues sous-estiment la chaleur d'environ 1 à 2 °C, mais les
+  <strong>comparaisons entre communes ne sont pas affectées</strong>.
+  Détail par station :
+  <a href="https://github.com/HugoGresse/Climate-Refuge-town-finder/blob/main/docs/VALIDATION.md">docs/VALIDATION.md</a>.</p>
+
   <h2>Limites connues</h2>
   <ul>
-    <li>Pas encore de validation systématique contre les stations Météo-France (en cours).</li>
     <li>Pluies extrêmes, vent, incendie non intégrés au classement thermique.</li>
     <li>Projections climatiques (2050) non intégrées — la hiérarchie spatiale actuelle domine à cet horizon.</li>
   </ul>
