@@ -54,6 +54,12 @@ export function renderPanel(
     <div class="panel-footer muted small">
       Outil d'information, pas un avis immobilier ou assurantiel.
       Estimations maillées — consultez le rapport Géorisques à l'adresse.
+      <div class="footer-links">
+        <a href="/methodologie.html">Méthodologie</a> ·
+        <a href="/attributions.html">Sources</a> ·
+        <a href="/mentions-legales.html">Mentions légales</a> ·
+        <a href="/confidentialite.html">Confidentialité</a>
+      </div>
     </div>`;
 
   const search = root.querySelector<HTMLInputElement>("#origin-search")!;

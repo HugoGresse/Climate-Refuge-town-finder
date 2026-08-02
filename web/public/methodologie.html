@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Méthodologie — Climat &amp; risques communes</title>
+  <link rel="stylesheet" href="/pages.css" />
+</head>
+<body>
+  <a class="back" href="/">← Retour à la carte</a>
+  <h1>Méthodologie</h1>
+  <p class="muted">Version courante : v0.2 — document de référence complet (anglais) :
+    <a href="https://github.com/HugoGresse/Climate-Refuge-town-finder/blob/main/METHODOLOGY.md">METHODOLOGY.md</a>.</p>
+
+  <h2>Ce que l'outil affirme — et n'affirme pas</h2>
+  <p>Comparaisons relatives d'indicateurs climatiques calculés de façon identique
+  pour chaque commune, et rappel de données officielles de risques. Aucune commune
+  n'est déclarée « sûre » ou « à risque » : le classement est une aide au tri,
+  pas un verdict. Rien n'est valable à une échelle plus fine que la commune —
+  le risque d'inondation varie à l'échelle de la rue :
+  <a href="https://www.georisques.gouv.fr/">consultez le rapport Géorisques à l'adresse</a>
+  avant toute décision.</p>
+
+  <h2>Données climatiques</h2>
+  <table>
+    <tr><th>Couche</th><th>Source</th><th>Période</th></tr>
+    <tr><td>Été récent (référence du classement)</td><td>ERA5-Land 0,1° (Copernicus), modèle épinglé</td><td>2016–2025 (10 étés complets)</td></tr>
+    <tr><td>Normales (contexte)</td><td>ERA5-Land</td><td>1991–2020 — affichées uniquement si ≥ 20 ans disponibles</td></tr>
+  </table>
+  <p>Chaque commune est estimée au point mairie, avec un ajustement d'altitude
+  (données Copernicus DEM). Les températures sont des estimations de maille
+  (~10 km), pas des relevés de station : un biais de 1 à 2 °C est possible,
+  notamment sur les littoraux et en ville (l'îlot de chaleur urbain nocturne est
+  sous-estimé, ce qui <em>sous-estime</em> l'avantage de quitter une grande ville).
+  Les différences inférieures à 0,5 °C sont considérées comme non significatives.</p>
+
+  <h2>Indicateurs</h2>
+  <ul>
+    <li><strong>Tmax moyen été</strong> : moyenne des maximales quotidiennes juin–août.</li>
+    <li><strong>Nuits tropicales</strong> : nuits ≥ 20 °C par an — le meilleur discriminant côte/altitude.</li>
+    <li><strong>Degrés-jours de climatisation (CDD18)</strong> : intensité × durée de la chaleur, base 18 °C.</li>
+    <li><strong>Jours ≥ 30/35 °C</strong> : contexte, seuils inclusifs.</li>
+    <li><strong>Centiles nationaux</strong> : rang parmi les 34 715 communes, jamais recalculé sur un rayon.</li>
+  </ul>
+
+  <h2>Risques (historique officiel, pas un score)</h2>
+  <ul>
+    <li><strong>Inondations</strong> : arrêtés CATNAT depuis 1982 (GASPAR), dédupliqués ; plans PPRI et atlas AZI.
+      Attention : le nombre d'arrêtés reflète aussi l'urbanisation et les pratiques de déclaration.</li>
+    <li><strong>Feu de forêt, argiles</strong> : risque identifié au DDRM (identification, pas une intensité).</li>
+    <li><strong>Recul du trait de côte</strong> : communes sous décret d'adaptation en vigueur.</li>
+  </ul>
+
+  <h2>Services (BPE INSEE 2024)</h2>
+  <p>Hôpital, urgences, médecins, pharmacie, gare, lycée, supermarché — le filtre
+  « avec hôpital et gare » évite de recommander un hameau sans services.</p>
+
+  <h2>Limites connues</h2>
+  <ul>
+    <li>Pas encore de validation systématique contre les stations Météo-France (en cours).</li>
+    <li>Pluies extrêmes, vent, incendie non intégrés au classement thermique.</li>
+    <li>Projections climatiques (2050) non intégrées — la hiérarchie spatiale actuelle domine à cet horizon.</li>
+  </ul>
+</body>
+</html>
