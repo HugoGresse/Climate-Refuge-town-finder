@@ -22,6 +22,9 @@ export function popupHtml(c: CommuneEntry, origin: CommuneEntry | null): string 
   const badges = [
     c.ppri === "approved" ? "PPRI approuvé" : c.ppri === "prescribed" ? "PPRI prescrit" : null,
     c.azi ? "AZI" : null,
+    c.fire ? "Feu de forêt (DDRM)" : null,
+    c.clay ? "Argiles (DDRM)" : null,
+    c.coastal ? "Recul du trait de côte" : null,
   ]
     .filter((b): b is string => b !== null)
     .map((b) => `<span class="badge">${b}</span>`)

@@ -28,6 +28,11 @@ const FLOOD_LABELS = [
 ];
 const COASTAL_LABEL = "Chocs Mécaniques liés à l'action des Vagues";
 const DROUGHT_LABEL = "Sécheresse";
+/** DDRM (dossier départemental des risques majeurs) identified-risk labels. */
+const DDRM_WILDFIRE = "Feu de forêt";
+const DDRM_CLAY = "Tassements différentiels";
+const COASTAL_RETREAT_CSV =
+  "https://static.data.gouv.fr/resources/liste-des-communes-volontaires-pour-sadapter-au-recul-du-trait-de-cote/20260218-105039/trait-de-cote-commune-2026-95.csv";
 
 interface CommuneHazards {
   floodCatnat: number;
@@ -37,10 +42,15 @@ interface CommuneHazards {
   droughtCatnat: number;
   ppriState: "approved" | "prescribed" | null;
   azi: boolean;
+  /** Risk identified in the DDRM — identification, not an intensity class. */
+  wildfireDdrm: boolean;
+  clayDdrm: boolean;
+  /** Commune under an active coastal-retreat adaptation decree. */
+  coastalRetreat: boolean;
 }
 
-/** Semicolon split honoring double quotes (with "" escapes). */
-export function splitSemicolonLine(line: string): string[] {
+/** Delimited split honoring double quotes (with "" escapes). */
+export function splitDelimited(line: string, delimiter: string): string[] {
   const fields: string[] = [];
   let current = "";
   let inQuotes = false;
@@ -59,7 +69,7 @@ export function splitSemicolonLine(line: string): string[] {
       }
     } else if (char === '"') {
       inQuotes = true;
-    } else if (char === ";") {
+    } else if (char === delimiter) {
       fields.push(current);
       current = "";
     } else {
@@ -69,6 +79,9 @@ export function splitSemicolonLine(line: string): string[] {
   fields.push(current);
   return fields;
 }
+
+export const splitSemicolonLine = (line: string): string[] =>
+  splitDelimited(line, ";");
 
 async function ensureDump(): Promise<void> {
   const zip = new URL("gaspar.zip", GASPAR_DIR);
@@ -117,6 +130,9 @@ function entry(map: Map<string, CommuneHazards>, insee: string): CommuneHazards 
       droughtCatnat: 0,
       ppriState: null,
       azi: false,
+      wildfireDdrm: false,
+      clayDdrm: false,
+      coastalRetreat: false,
     };
     map.set(insee, existing);
   }
@@ -179,6 +195,42 @@ async function main(): Promise<void> {
     const insee = row[aInsee];
     if (insee) entry(hazards, insee).azi = true;
   }
+
+  const ddrm = await loadCsv("ddrm_risq_gaspar_");
+  const dInsee = column(ddrm.header, "cod_commune");
+  const dRisk = column(ddrm.header, "lib_risque");
+  for (const row of ddrm.rows) {
+    const insee = row[dInsee];
+    const risk = row[dRisk];
+    if (!insee || !risk) continue;
+    if (risk === DDRM_WILDFIRE) entry(hazards, insee).wildfireDdrm = true;
+    else if (risk === DDRM_CLAY) entry(hazards, insee).clayDdrm = true;
+  }
+
+  // Coastal-retreat decree list (data.gouv, Licence Ouverte 2.0).
+  const coastalDir = new URL("../data/hazard-src/", import.meta.url);
+  await mkdir(coastalDir, { recursive: true });
+  const coastalFile = new URL("coastal.csv", coastalDir);
+  if (!existsSync(coastalFile)) {
+    const response = await fetch(COASTAL_RETREAT_CSV);
+    if (!response.ok) throw new Error(`coastal list HTTP ${response.status}`);
+    await writeFile(coastalFile, await response.text());
+  }
+  const coastalLines = (await readFile(coastalFile, "utf8"))
+    .split("\n")
+    .filter((l) => l.trim().length > 0);
+  const coastalHeader = splitDelimited(coastalLines[0]!, ",");
+  const ccInsee = coastalHeader.indexOf("code_commune");
+  const ccActive = coastalHeader.indexOf("is_currently_active");
+  let coastalCount = 0;
+  for (const line of coastalLines.slice(1)) {
+    const row = splitDelimited(line, ",");
+    const insee = row[ccInsee];
+    if (!insee || row[ccActive]?.toLowerCase() !== "true") continue;
+    entry(hazards, insee).coastalRetreat = true;
+    coastalCount++;
+  }
+  console.log(`coastal-retreat decree communes (active): ${coastalCount}`);
 
   const artifact = {
     meta: {

@@ -51,6 +51,9 @@ async function main(): Promise<void> {
         lastFlood: string | null;
         ppriState: string | null;
         azi: boolean;
+        wildfireDdrm: boolean;
+        clayDdrm: boolean;
+        coastalRetreat: boolean;
       }
     >;
   }>(HAZARDS_FILE);
@@ -88,6 +91,9 @@ async function main(): Promise<void> {
         lastFlood: hazard?.lastFlood ?? null,
         ppri: hazard?.ppriState ?? null,
         azi: hazard?.azi ?? false,
+        fire: hazard?.wildfireDdrm ?? false,
+        clay: hazard?.clayDdrm ?? false,
+        coastal: hazard?.coastalRetreat ?? false,
       },
     ];
   });

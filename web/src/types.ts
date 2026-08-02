@@ -18,6 +18,9 @@ export interface CommuneEntry {
   readonly lastFlood: string | null;
   readonly ppri: string | null;
   readonly azi: boolean;
+  readonly fire: boolean;
+  readonly clay: boolean;
+  readonly coastal: boolean;
 }
 
 export interface Dataset {
