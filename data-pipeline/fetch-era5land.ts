@@ -152,6 +152,9 @@ async function fetchSeries(url: string, attempts = 8): Promise<ArchiveResponse> 
 }
 
 function selectTargets(communes: Commune[], mode: string): Commune[] {
+  if (mode === "all") {
+    return communes;
+  }
   if (mode === "pilot") {
     return communes.filter((c) => PILOT_DEPTS.includes(c.dept));
   }
@@ -187,46 +190,79 @@ async function main(): Promise<void> {
 
   const host = await resolveHost();
   const pauseMs = LOCAL ? 25 : host === CUSTOMER_HOST ? 150 : 15_000;
+  // The self-hosted API has no quota: batch many locations per request.
+  const batchSize = LOCAL ? 50 : 1;
 
+  const pending = targets.filter(
+    (c) => !existsSync(new URL(`${c.insee}.json.gz`, CACHE_DIR)),
+  );
+  const skipped = targets.length - pending.length;
   let done = 0;
-  let skipped = 0;
-  for (const commune of targets) {
-    const cacheFile = new URL(`${commune.insee}.json.gz`, CACHE_DIR);
-    if (existsSync(cacheFile)) {
-      skipped++;
-      continue;
+
+  for (let i = 0; i < pending.length; i += batchSize) {
+    const batch = pending.slice(i, i + batchSize);
+    const seriesList =
+      batch.length === 1
+        ? [await fetchSeries(buildUrl(host, batch[0]!))]
+        : await fetchSeriesBatch(host, batch);
+    for (let j = 0; j < batch.length; j++) {
+      const commune = batch[j]!;
+      const series = seriesList[j];
+      if (!series) {
+        console.warn(`no series for ${commune.name} (${commune.insee})`);
+        continue;
+      }
+      const payload = {
+        meta: {
+          insee: commune.insee,
+          name: commune.name,
+          dept: commune.dept,
+          requested: {
+            lat: commune.lat,
+            lon: commune.lon,
+            elevationM: commune.elevationM,
+          },
+          grid: {
+            lat: series.latitude,
+            lon: series.longitude,
+            elevation: series.elevation,
+          },
+          model: MODEL,
+          period: { start: START_DATE, end: END_DATE },
+          timezone: "Europe/Paris",
+        },
+        daily: series.daily,
+      };
+      await writeFile(
+        new URL(`${commune.insee}.json.gz`, CACHE_DIR),
+        gzipSync(JSON.stringify(payload)),
+      );
+      done++;
     }
-    const series = await fetchSeries(buildUrl(host, commune));
-    const payload = {
-      meta: {
-        insee: commune.insee,
-        name: commune.name,
-        dept: commune.dept,
-        requested: {
-          lat: commune.lat,
-          lon: commune.lon,
-          elevationM: commune.elevationM,
-        },
-        grid: {
-          lat: series.latitude,
-          lon: series.longitude,
-          elevation: series.elevation,
-        },
-        model: MODEL,
-        period: { start: START_DATE, end: END_DATE },
-        timezone: "Europe/Paris",
-      },
-      daily: series.daily,
-    };
-    await writeFile(cacheFile, gzipSync(JSON.stringify(payload)));
-    done++;
-    console.log(
-      `${done + skipped}/${targets.length} ${commune.name} (${commune.insee}) ` +
-        `grid elev ${series.elevation} m`,
-    );
+    if (i % (batchSize * 20) === 0 || i + batchSize >= pending.length) {
+      console.log(`${done + skipped}/${targets.length}`);
+    }
     await sleep(pauseMs);
   }
   console.log(`finished: ${done} fetched, ${skipped} already cached, ${targets.length} total`);
+}
+
+async function fetchSeriesBatch(
+  host: string,
+  batch: readonly Commune[],
+): Promise<(ArchiveResponse | null)[]> {
+  const url =
+    `${host}?latitude=${batch.map((c) => c.lat).join(",")}` +
+    `&longitude=${batch.map((c) => c.lon).join(",")}` +
+    `&elevation=${batch.map((c) => c.elevationM ?? "").join(",")}` +
+    `&start_date=${START_DATE}&end_date=${END_DATE}&daily=${DAILY_VARS}` +
+    `&models=${MODEL}&timezone=Europe%2FParis`;
+  const list = (await fetchSeries(url)) as unknown;
+  if (!Array.isArray(list)) {
+    throw new Error("expected array response for multi-location request");
+  }
+  // Multi-location responses carry location_id; order matches the input.
+  return batch.map((_, index) => (list[index] as ArchiveResponse) ?? null);
 }
 
 await main();

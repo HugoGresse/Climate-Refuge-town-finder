@@ -167,25 +167,25 @@ async function main(): Promise<void> {
 
   await writeFile(
     OUT_FILE,
-    JSON.stringify(
-      {
-        meta: {
-          generatedAt: new Date().toISOString(),
-          model: "era5_land",
-          layers: LAYERS,
-          count: communes.length,
-        },
-        communes,
+    JSON.stringify({
+      meta: {
+        generatedAt: new Date().toISOString(),
+        model: "era5_land",
+        layers: LAYERS,
+        count: communes.length,
       },
-      null,
-      1,
-    ),
+      communes,
+    }),
   );
 
+  const shown =
+    communes.length > 40
+      ? [...communes.slice(0, 15), ...communes.slice(-15)]
+      : communes;
   console.log(
     "\nname                      elev  JJA_n  JJA_r  CDD_n  CDD_r  tropN_r  d35_r  rx1d",
   );
-  for (const c of communes) {
+  for (const c of shown) {
     console.log(
       c.name.padEnd(25) +
         String(c.elevationM ?? "?").padStart(5) +

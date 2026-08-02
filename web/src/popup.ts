@@ -3,11 +3,11 @@ import type { CommuneEntry } from "./types";
 const esc = (s: string): string =>
   s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
-function delta(value: number | null, origin: number | null): string {
+function delta(value: number | null, origin: number | null, originName: string): string {
   if (value == null || origin == null) return "";
   const d = value - origin;
   const signed = `${d >= 0 ? "+" : "−"}${Math.abs(d).toFixed(1)}`;
-  return `<span class="delta">${signed} vs Montpellier</span>`;
+  return `<span class="delta">${signed} vs ${esc(originName)}</span>`;
 }
 
 const row = (label: string, value: string): string =>
@@ -31,9 +31,9 @@ export function popupHtml(c: CommuneEntry, origin: CommuneEntry | null): string 
     <div class="popup">
       <h2>${esc(c.name)} <span class="muted">(${c.dept})</span></h2>
       <div class="muted small">${c.elev ?? "?"} m · ${c.pop?.toLocaleString("fr-FR") ?? "?"} hab.</div>
-      ${row("Tmax été 2016–2025", `${c.jjaRecent.toFixed(1)} °C ${delta(c.jjaRecent, o?.jjaRecent ?? null)}`)}
+      ${row("Tmax été 2016–2025", `${c.jjaRecent.toFixed(1)} °C ${delta(c.jjaRecent, o?.jjaRecent ?? null, o?.name ?? "")}`)}
       ${row("Normale 1991–2020", c.jjaNormals == null ? "—" : `${c.jjaNormals.toFixed(1)} °C`)}
-      ${row("Nuits tropicales/an", c.tropN == null ? "—" : `${c.tropN.toFixed(0)} ${delta(c.tropN, o?.tropN ?? null)}`)}
+      ${row("Nuits tropicales/an", c.tropN == null ? "—" : `${c.tropN.toFixed(0)} ${delta(c.tropN, o?.tropN ?? null, o?.name ?? "")}`)}
       ${row("Jours ≥ 35 °C/an", c.d35 == null ? "—" : c.d35.toFixed(1))}
       ${row("Degrés-jours clim (CDD18)", c.cdd == null ? "—" : c.cdd.toFixed(0))}
       ${row("Inondations CATNAT depuis 1982", flood)}
