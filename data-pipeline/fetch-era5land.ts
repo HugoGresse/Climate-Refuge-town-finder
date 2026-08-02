@@ -23,11 +23,18 @@ try {
   // optional
 }
 
+const ARGS = process.argv.slice(2);
+/** --local targets a self-hosted open-meteo container (no quota, no key). */
+const LOCAL = ARGS.includes("--local");
+
 const API_KEY = process.env["OPEN_METEO_API_KEY"];
 const FREE_HOST = "https://archive-api.open-meteo.com/v1/archive";
 const CUSTOMER_HOST = "https://customer-archive-api.open-meteo.com/v1/archive";
+const LOCAL_HOST = process.env["OM_LOCAL_HOST"] ?? "http://127.0.0.1:8080/v1/archive";
 
-const START_DATE = "1991-01-01";
+// Self-hosted archive is synced from 2015 (user decision — recent layer is
+// the primary orientation; pre-2015 normals wait on the CDS path).
+const START_DATE = process.env["OM_START"] ?? (LOCAL ? "2015-01-01" : "1991-01-01");
 const END_DATE = "2025-12-31";
 // No precipitation here: ERA5-Land via Open-Meteo serves none (verified —
 // 12 784/12 784 nulls). Heavy-precip metrics come from CERRA (issue #7).
@@ -82,6 +89,10 @@ function sleep(ms: number): Promise<void> {
 }
 
 async function resolveHost(): Promise<string> {
+  if (LOCAL) {
+    console.log(`using self-hosted open-meteo at ${LOCAL_HOST}`);
+    return LOCAL_HOST;
+  }
   if (!API_KEY) return FREE_HOST;
   const probe =
     `${CUSTOMER_HOST}?latitude=43.6&longitude=3.9&start_date=2024-01-01` +
@@ -167,7 +178,7 @@ function selectTargets(communes: Commune[], mode: string): Commune[] {
 }
 
 async function main(): Promise<void> {
-  const mode = process.argv[2] ?? "validation";
+  const mode = ARGS.find((a) => !a.startsWith("--")) ?? "validation";
   const referential = JSON.parse(await readFile(COMMUNES_FILE, "utf8")) as {
     communes: Commune[];
   };
@@ -175,7 +186,7 @@ async function main(): Promise<void> {
   await mkdir(CACHE_DIR, { recursive: true });
 
   const host = await resolveHost();
-  const pauseMs = host === CUSTOMER_HOST ? 150 : 15_000;
+  const pauseMs = LOCAL ? 25 : host === CUSTOMER_HOST ? 150 : 15_000;
 
   let done = 0;
   let skipped = 0;
