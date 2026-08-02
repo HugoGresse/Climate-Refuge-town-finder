@@ -92,6 +92,15 @@ Phases invert the usual order: ship a defensible single-region explorer first, w
 - Disclaimer on every results view: screening information, not property/insurance/safety advice; hazard data indicative at commune scale; deep link to the official **Géorisques/ERRIAL address-level report** — *"consultez le rapport à l'adresse avant tout achat"*.
 - Reputational governance: neutral wording, provenance + data date everywhere, an error-reporting channel, a correction/versioning policy, and a "data as of" + sunset policy in the footer.
 
+## Deployment (Coolify)
+
+Static image: `docker build -t climat-communes .` → nginx-unprivileged serving
+`web/dist` on port **8080** (gzip on, immutable asset caching, 1 h dataset
+caching). In Coolify: new resource → Dockerfile build from this repo, expose
+8080, attach a domain. A data refresh is a rebuild with an updated
+`web/public/data/dataset.json` — no code change. Before public launch: fill the
+host section of `web/public/mentions-legales.html`.
+
 ## Development
 
 ```bash

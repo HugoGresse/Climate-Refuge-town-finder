@@ -23,6 +23,62 @@ function passesPreset(c: CommuneEntry, minPop: number): boolean {
 const strip = (s: string): string =>
   s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
 
+function filteredSorted(
+  dataset: Dataset,
+  origin: CommuneEntry,
+  state: AppState,
+): CommuneEntry[] {
+  return dataset.communes
+    .filter(
+      (c) =>
+        passesPreset(c, state.minPop) &&
+        haversineKm(
+          { lat: origin.lat, lon: origin.lon },
+          { lat: c.lat, lon: c.lon },
+        ) <= state.radiusKm,
+    )
+    .sort((a, b) => a.jjaRecent - b.jjaRecent);
+}
+
+function downloadCsv(
+  rows: CommuneEntry[],
+  origin: CommuneEntry,
+  state: AppState,
+): void {
+  const quote = (v: unknown): string => `"${String(v ?? "").replace(/"/g, '""')}"`;
+  const header = [
+    "insee", "commune", "dept", "distance_km", "altitude_m", "population",
+    "tmax_ete_2016_2025", "delta_vs_origine", "nuits_tropicales_an",
+    "jours_35c_an", "cdd18", "centile_chaleur", "centile_inondations",
+    "arretes_inondation_1982", "dernier_arrete", "ppri", "feu_foret_ddrm",
+    "argiles_ddrm", "recul_trait_de_cote", "hopital", "gare",
+  ];
+  const lines = [
+    `# Climat & risques communes — origine ${origin.name}, rayon ${state.radiusKm} km — été 2016-2025, ERA5-Land (Copernicus) / GASPAR / BPE INSEE — estimations maillées, pas des relevés de station`,
+    header.join(","),
+    ...rows.map((c) =>
+      [
+        c.insee, quote(c.name), c.dept,
+        Math.round(haversineKm({ lat: origin.lat, lon: origin.lon }, { lat: c.lat, lon: c.lon })),
+        c.elev ?? "", c.pop ?? "", c.jjaRecent,
+        (c.jjaRecent - origin.jjaRecent).toFixed(1),
+        c.tropN ?? "", c.d35 ?? "", c.cdd ?? "", c.hPct ?? "", c.fPct ?? "",
+        c.floods, c.lastFlood ?? "", c.ppri ?? "",
+        c.fire ? 1 : 0, c.clay ? 1 : 0, c.coastal ? 1 : 0,
+        c.hosp ? 1 : 0, c.station ? 1 : 0,
+      ].join(","),
+    ),
+  ];
+  const blob = new Blob(["﻿" + lines.join("\n")], {
+    type: "text/csv;charset=utf-8",
+  });
+  const link = document.createElement("a");
+  link.href = URL.createObjectURL(blob);
+  link.download = `communes_${origin.insee}_r${state.radiusKm}.csv`;
+  link.click();
+  URL.revokeObjectURL(link.href);
+}
+
 export function renderPanel(
   root: HTMLElement,
   dataset: Dataset,
@@ -50,6 +106,7 @@ export function renderPanel(
     <div class="panel-block">
       <div class="panel-label">Plus fraîches dans le rayon <span class="muted">(été 2016–2025)</span></div>
       <ol class="ranking" id="ranking"></ol>
+      <button class="export-btn" id="export-csv" type="button">Exporter le tri complet (CSV)</button>
     </div>
     <div class="panel-footer muted small">
       Outil d'information, pas un avis immobilier ou assurantiel.
@@ -109,6 +166,12 @@ export function renderPanel(
     const commune = insee ? byInsee.get(insee) : undefined;
     if (commune) callbacks.onFocus(commune);
   });
+  root.querySelector("#export-csv")!.addEventListener("click", () => {
+    const state = getState();
+    const origin = byInsee.get(state.originInsee);
+    if (!origin) return;
+    downloadCsv(filteredSorted(dataset, origin, state), origin, state);
+  });
 
   function refresh(): void {
     const state = getState();
@@ -119,17 +182,7 @@ export function renderPanel(
     radiusValue.textContent = `${state.radiusKm} km`;
     minPop.value = String(state.minPop);
 
-    const rows = dataset.communes
-      .filter(
-        (c) =>
-          passesPreset(c, state.minPop) &&
-          haversineKm(
-            { lat: origin.lat, lon: origin.lon },
-            { lat: c.lat, lon: c.lon },
-          ) <= state.radiusKm,
-      )
-      .sort((a, b) => a.jjaRecent - b.jjaRecent)
-      .slice(0, 15);
+    const rows = filteredSorted(dataset, origin, state).slice(0, 15);
     ranking.innerHTML = rows
       .map((c) => {
         const delta = c.jjaRecent - origin.jjaRecent;

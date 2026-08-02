@@ -1,0 +1,15 @@
+.git/
+node_modules/
+web/node_modules/
+web/dist/
+data/
+!web/public/data/
+.venv-etl/
+.claude/
+.github/
+*.log
+*.md
+!METHODOLOGY.md
+.env
+Dockerfile
+.dockerignore

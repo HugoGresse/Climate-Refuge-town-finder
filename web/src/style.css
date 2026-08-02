@@ -153,6 +153,23 @@ body,
   line-height: 150%;
 }
 
+.export-btn {
+  margin-top: var(--space-md);
+  padding: var(--space-md) var(--space-lg);
+  width: 100%;
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--rounded-md);
+  background: var(--color-surface);
+  color: var(--color-foreground);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.export-btn:hover {
+  border-color: var(--color-primary);
+}
+
 .footer-links {
   margin-top: var(--space-md);
 }
